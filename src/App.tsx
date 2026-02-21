@@ -59,7 +59,7 @@ export const App: React.FC = () => {
     }
 
     if (room.role === 'admin') {
-      if (state === 'diagnosing' && room.allCompleted && screen === 'waiting') {
+      if (state === 'diagnosing' && room.allCompleted && screen === 'diagnosis') {
         handleCalculateResults();
       }
     }
@@ -70,14 +70,12 @@ export const App: React.FC = () => {
   const handleCreateRoom = useCallback(async (mode: Mode, layout: SeatLayout) => {
     const code = await createRoom(mode, layout);
     room.setRoomCode(code);
-    // Admin auto-joins as participant too
     setScreen('waiting');
   }, [room]);
 
   const handleStartDiagnosis = useCallback(async () => {
     if (!room.roomCode) return;
     await startDiagnosis(room.roomCode);
-    // Admin also needs to answer
     setScreen('diagnosis');
   }, [room.roomCode]);
 
