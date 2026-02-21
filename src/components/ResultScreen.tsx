@@ -10,7 +10,7 @@ interface Props {
   seatAssignments: SeatAssignment[];
   awards: Award[];
   layout: SeatLayout;
-  onReshuffle: () => void;
+  onReshuffle?: () => void;
   onShowMatrix: () => void;
   reshuffleCount: number;
 }
@@ -259,12 +259,14 @@ export const ResultScreen: React.FC<Props> = ({
       {phase === 'done' && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-dark-200 via-dark-200 to-transparent">
           <div className="flex gap-3 max-w-lg mx-auto">
-            <button
-              onClick={onReshuffle}
-              className="flex-1 py-3 bg-gray-700 text-white font-bold rounded-xl hover:bg-gray-600 transition-all active:scale-95"
-            >
-              🔄 席替え
-            </button>
+            {onReshuffle && (
+              <button
+                onClick={onReshuffle}
+                className="flex-1 py-3 bg-gray-700 text-white font-bold rounded-xl hover:bg-gray-600 transition-all active:scale-95"
+              >
+                🔄 席替え
+              </button>
+            )}
             <button
               onClick={onShowMatrix}
               className="flex-1 py-3 bg-gradient-to-r from-secondary to-teal-400 text-white font-bold rounded-xl hover:scale-105 transition-all active:scale-95"

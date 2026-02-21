@@ -1,181 +1,285 @@
-import React, { useState, useCallback } from 'react';
-import type { GameState, Mode, SeatLayout, Participant, Screen } from './types';
+import React, { useState, useCallback, useEffect } from 'react';
+import type { Screen, Mode, SeatLayout } from './types';
+import { useRoom } from './hooks/useRoom';
 import { computeVector, computeAllCompatibility } from './logic/scoring';
 import { optimizeSeating, reshuffleSeating } from './logic/optimization';
 import { computeAwards } from './logic/awards';
 import { getPersonalType } from './data/typeNames';
+import {
+  createRoom,
+  joinRoom,
+  startDiagnosis,
+  submitAnswers,
+  publishResults,
+  togglePairVisibility,
+  revealResults,
+  updateSeatAssignments,
+  getRoomConfig,
+  leaveRoom,
+} from './lib/firebase';
+
 import { TopScreen } from './components/TopScreen';
 import { SetupScreen } from './components/SetupScreen';
-import { RegisterScreen } from './components/RegisterScreen';
+import { JoinScreen } from './components/JoinScreen';
+import { ProfileScreen } from './components/ProfileScreen';
+import { WaitingScreen } from './components/WaitingScreen';
 import { DiagnosisScreen } from './components/DiagnosisScreen';
+import { AdminResultScreen } from './components/AdminResultScreen';
 import { ResultScreen } from './components/ResultScreen';
 import { MatrixScreen } from './components/MatrixScreen';
 
-const initialState: GameState = {
-  screen: 'top',
-  mode: 'goukon',
-  layout: 'facing-long',
-  participants: [],
-  currentDiagnosisIndex: 0,
-  compatibilityResults: [],
-  seatAssignments: [],
-  awards: [],
-  reshuffleCount: 0,
-};
-
 export const App: React.FC = () => {
-  const [state, setState] = useState<GameState>(initialState);
+  const room = useRoom();
+  const [screen, setScreen] = useState<Screen>('loading');
+  const [reshuffleCount, setReshuffleCount] = useState(1);
 
-  const setScreen = (screen: Screen) => setState((s) => ({ ...s, screen }));
-
-  const handleSetup = useCallback((mode: Mode, layout: SeatLayout) => {
-    setState((s) => ({ ...s, mode, layout, screen: 'register' }));
-  }, []);
-
-  const handleAddParticipant = useCallback((p: Participant) => {
-    setState((s) => ({
-      ...s,
-      participants: [...s.participants, p],
-    }));
-  }, []);
-
-  const handleRemoveParticipant = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      participants: s.participants.filter((p) => p.id !== id),
-    }));
-  }, []);
-
-  const handleStartDiagnosis = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      screen: 'diagnosis-intro',
-      currentDiagnosisIndex: 0,
-    }));
-  }, []);
-
-  const handleDiagnosisComplete = useCallback((answers: number[]) => {
-    setState((s) => {
-      const vector = computeVector(answers);
-      const personalType = getPersonalType(vector);
-
-      const updatedParticipants = [...s.participants];
-      updatedParticipants[s.currentDiagnosisIndex] = {
-        ...updatedParticipants[s.currentDiagnosisIndex],
-        answers,
-        vector,
-        personalType: personalType.name,
-        personalTypeEmoji: personalType.emoji,
-      };
-
-      const nextIndex = s.currentDiagnosisIndex + 1;
-
-      if (nextIndex >= updatedParticipants.length) {
-        // All done - calculate results
-        const results = computeAllCompatibility(updatedParticipants);
-        const seats = optimizeSeating(updatedParticipants, results, s.layout, s.mode);
-        const awards = computeAwards(updatedParticipants, results, seats);
-
-        return {
-          ...s,
-          participants: updatedParticipants,
-          compatibilityResults: results,
-          seatAssignments: seats,
-          awards,
-          reshuffleCount: 1,
-          screen: 'calculating',
-          currentDiagnosisIndex: nextIndex,
-        };
-      }
-
-      return {
-        ...s,
-        participants: updatedParticipants,
-        currentDiagnosisIndex: nextIndex,
-        screen: 'diagnosis',
-      };
-    });
-  }, []);
-
-  const handleReshuffle = useCallback(() => {
-    setState((s) => {
-      const newCount = s.reshuffleCount + 1;
-      const newSeats = reshuffleSeating(
-        s.participants,
-        s.compatibilityResults,
-        s.layout,
-        s.mode,
-        newCount,
-        s.seatAssignments
-      );
-      const awards = computeAwards(s.participants, s.compatibilityResults, newSeats);
-
-      return {
-        ...s,
-        seatAssignments: newSeats,
-        awards,
-        reshuffleCount: newCount,
-      };
-    });
-  }, []);
-
-  // Calculating screen with transition
-  React.useEffect(() => {
-    if (state.screen === 'calculating') {
-      const timer = setTimeout(() => setScreen('result'), 2000);
-      return () => clearTimeout(timer);
+  // Wait for auth to be ready
+  useEffect(() => {
+    if (room.isReady && screen === 'loading') {
+      setScreen('top');
     }
-  }, [state.screen]);
+  }, [room.isReady, screen]);
+
+  // React to room state changes (for participants)
+  useEffect(() => {
+    if (!room.roomData || !room.role) return;
+
+    const state = room.roomData.config.state;
+
+    if (room.role === 'participant') {
+      if (state === 'diagnosing' && room.myParticipant && !room.myParticipant.completed) {
+        setScreen('diagnosis');
+      } else if (state === 'diagnosing' && room.myParticipant?.completed) {
+        setScreen('waiting-results');
+      } else if ((state === 'admin-review') && !room.revealed) {
+        setScreen('waiting-results');
+      } else if (state === 'results' && room.revealed) {
+        setScreen('result');
+      }
+    }
+
+    if (room.role === 'admin') {
+      if (state === 'diagnosing' && room.allCompleted && screen === 'waiting') {
+        handleCalculateResults();
+      }
+    }
+  }, [room.roomData?.config.state, room.allCompleted, room.revealed, room.myParticipant?.completed]);
+
+  // --- Admin Actions ---
+
+  const handleCreateRoom = useCallback(async (mode: Mode, layout: SeatLayout) => {
+    const code = await createRoom(mode, layout);
+    room.setRoomCode(code);
+    // Admin auto-joins as participant too
+    setScreen('waiting');
+  }, [room]);
+
+  const handleStartDiagnosis = useCallback(async () => {
+    if (!room.roomCode) return;
+    await startDiagnosis(room.roomCode);
+    // Admin also needs to answer
+    setScreen('diagnosis');
+  }, [room.roomCode]);
+
+  const handleCalculateResults = useCallback(async () => {
+    if (!room.roomCode || !room.roomData) return;
+
+    // Build participants with vectors
+    const participantsWithVectors = room.participants.map((p) => {
+      const vector = computeVector(p.answers);
+      const pt = getPersonalType(vector);
+      return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
+    });
+
+    const results = computeAllCompatibility(participantsWithVectors);
+    const mode = room.roomData.config.mode;
+    const layout = room.roomData.config.layout;
+    const seats = optimizeSeating(participantsWithVectors, results, layout, mode);
+    const awards = computeAwards(participantsWithVectors, results, seats);
+
+    // Build participant updates for Firebase
+    const participantUpdates: Record<string, any> = {};
+    for (const p of participantsWithVectors) {
+      participantUpdates[p.id] = {
+        vector: p.vector,
+        personalType: p.personalType,
+        personalTypeEmoji: p.personalTypeEmoji,
+      };
+    }
+
+    await publishResults(room.roomCode, results, seats, awards, participantUpdates);
+    setScreen('admin-review');
+  }, [room.roomCode, room.roomData, room.participants]);
+
+  const handleTogglePair = useCallback(async (pairKey: string, visible: boolean) => {
+    if (!room.roomCode) return;
+    await togglePairVisibility(room.roomCode, pairKey, visible);
+  }, [room.roomCode]);
+
+  const handleReveal = useCallback(async () => {
+    if (!room.roomCode) return;
+    await revealResults(room.roomCode);
+  }, [room.roomCode]);
+
+  const handleReshuffle = useCallback(async () => {
+    if (!room.roomCode || !room.roomData) return;
+
+    const newCount = reshuffleCount + 1;
+    const mode = room.roomData.config.mode;
+    const layout = room.roomData.config.layout;
+
+    const newSeats = reshuffleSeating(
+      room.participants,
+      room.compatibilityResults,
+      layout,
+      mode,
+      newCount,
+      room.seatAssignments
+    );
+    const awards = computeAwards(room.participants, room.compatibilityResults, newSeats);
+
+    await updateSeatAssignments(room.roomCode, newSeats, awards);
+    setReshuffleCount(newCount);
+  }, [room.roomCode, room.roomData, room.participants, room.compatibilityResults, room.seatAssignments, reshuffleCount]);
+
+  // --- Participant Actions ---
+
+  const handleJoinRoom = useCallback(async (code: string) => {
+    const config = await getRoomConfig(code);
+    if (!config) return;
+    room.setRoomCode(code);
+    if (config.adminId === room.uid) {
+      // Rejoining as admin
+      if (config.state === 'waiting') setScreen('waiting');
+      else if (config.state === 'admin-review') setScreen('admin-review');
+      else if (config.state === 'results') setScreen('result');
+      else setScreen('waiting');
+    } else {
+      setScreen('profile');
+    }
+  }, [room]);
+
+  const handleProfileSubmit = useCallback(async (profile: { name: string; gender?: string; avatar: string }) => {
+    if (!room.roomCode) return;
+    await joinRoom(room.roomCode, {
+      name: profile.name,
+      gender: profile.gender,
+      avatar: profile.avatar,
+    });
+    setScreen('waiting');
+  }, [room.roomCode]);
+
+  const handleDiagnosisComplete = useCallback(async (answers: number[]) => {
+    if (!room.roomCode) return;
+    await submitAnswers(room.roomCode, answers);
+    if (room.role === 'admin') {
+      setScreen('waiting');
+    } else {
+      setScreen('waiting-results');
+    }
+  }, [room.roomCode, room.role]);
+
+  const handleBack = useCallback(async () => {
+    if (room.roomCode && screen === 'waiting' && room.role === 'participant') {
+      await leaveRoom(room.roomCode);
+    }
+    room.setRoomCode('');
+    setScreen('top');
+  }, [room, screen]);
+
+  // --- Render ---
+
+  if (screen === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center animate-pulse-slow">
+          <div className="text-4xl mb-4">🍻</div>
+          <p className="text-gray-400">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-lg mx-auto">
-      {state.screen === 'top' && (
-        <TopScreen onStart={() => setScreen('setup')} />
+      {screen === 'top' && (
+        <TopScreen
+          onStart={() => setScreen('setup')}
+          onJoin={() => setScreen('join')}
+        />
       )}
 
-      {state.screen === 'setup' && (
+      {screen === 'setup' && (
         <SetupScreen
-          onComplete={handleSetup}
+          onComplete={handleCreateRoom}
           onBack={() => setScreen('top')}
         />
       )}
 
-      {state.screen === 'register' && (
-        <RegisterScreen
-          mode={state.mode}
-          participants={state.participants}
-          onAddParticipant={handleAddParticipant}
-          onRemoveParticipant={handleRemoveParticipant}
+      {screen === 'join' && (
+        <JoinScreen
+          onJoin={handleJoinRoom}
+          onBack={() => setScreen('top')}
+        />
+      )}
+
+      {screen === 'profile' && room.roomData && (
+        <ProfileScreen
+          mode={room.roomData.config.mode}
+          usedAvatars={room.participants.map((p) => p.avatar)}
+          onSubmit={handleProfileSubmit}
+          onBack={handleBack}
+        />
+      )}
+
+      {screen === 'waiting' && room.roomCode && (
+        <WaitingScreen
+          roomCode={room.roomCode}
+          participants={room.participants}
+          role={room.role!}
           onStartDiagnosis={handleStartDiagnosis}
-          onBack={() => setScreen('setup')}
+          onBack={handleBack}
         />
       )}
 
-      {state.screen === 'diagnosis-intro' && (
+      {screen === 'diagnosis' && room.myParticipant && (
         <DiagnosisScreen
-          participant={state.participants[0]}
-          currentIndex={0}
-          totalParticipants={state.participants.length}
+          participant={room.myParticipant}
           onComplete={handleDiagnosisComplete}
         />
       )}
 
-      {state.screen === 'diagnosis' && (
-        <DiagnosisScreen
-          key={state.currentDiagnosisIndex}
-          participant={state.participants[state.currentDiagnosisIndex]}
-          currentIndex={state.currentDiagnosisIndex}
-          totalParticipants={state.participants.length}
-          onComplete={handleDiagnosisComplete}
-        />
+      {screen === 'diagnosis' && room.role === 'admin' && !room.myParticipant && (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="text-center">
+            <div className="text-4xl mb-4">📊</div>
+            <h2 className="text-xl font-bold mb-2">診断進行中</h2>
+            <p className="text-gray-400 mb-4">
+              {room.participants.filter((p) => p.completed).length} / {room.participants.length} 人完了
+            </p>
+            <div className="flex justify-center gap-2">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="w-3 h-3 bg-secondary rounded-full animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
-      {state.screen === 'calculating' && (
-        <div className="min-h-screen flex items-center justify-center">
+      {screen === 'waiting-results' && (
+        <div className="min-h-screen flex items-center justify-center px-6">
           <div className="text-center animate-pulse-slow">
             <div className="text-6xl mb-4">🔮</div>
-            <h2 className="text-2xl font-bold mb-2">運命を計算中...</h2>
-            <p className="text-gray-400">最適な席順を導き出しています</p>
+            <h2 className="text-2xl font-bold mb-2">結果を待っています...</h2>
+            <p className="text-gray-400">
+              {room.allCompleted
+                ? '幹事が結果を準備中です'
+                : `${room.participants.filter((p) => p.completed).length} / ${room.participants.length} 人回答済み`}
+            </p>
             <div className="mt-8 flex justify-center gap-2">
               {[0, 1, 2].map((i) => (
                 <div
@@ -189,23 +293,37 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {state.screen === 'result' && (
-        <ResultScreen
-          participants={state.participants}
-          results={state.compatibilityResults}
-          seatAssignments={state.seatAssignments}
-          awards={state.awards}
-          layout={state.layout}
+      {screen === 'admin-review' && room.roomData && (
+        <AdminResultScreen
+          participants={room.participants}
+          results={room.compatibilityResults}
+          seatAssignments={room.seatAssignments}
+          awards={room.awards}
+          layout={room.roomData.config.layout}
+          onTogglePair={handleTogglePair}
+          onReveal={handleReveal}
           onReshuffle={handleReshuffle}
-          onShowMatrix={() => setScreen('matrix')}
-          reshuffleCount={state.reshuffleCount}
+          revealed={room.revealed}
         />
       )}
 
-      {state.screen === 'matrix' && (
+      {screen === 'result' && room.roomData && (
+        <ResultScreen
+          participants={room.participants}
+          results={room.role === 'admin' ? room.compatibilityResults : room.visibleResults}
+          seatAssignments={room.seatAssignments}
+          awards={room.awards}
+          layout={room.roomData.config.layout}
+          onReshuffle={room.role === 'admin' ? handleReshuffle : undefined}
+          onShowMatrix={() => setScreen('matrix')}
+          reshuffleCount={reshuffleCount}
+        />
+      )}
+
+      {screen === 'matrix' && (
         <MatrixScreen
-          participants={state.participants}
-          results={state.compatibilityResults}
+          participants={room.participants}
+          results={room.role === 'admin' ? room.compatibilityResults : room.visibleResults}
           onBack={() => setScreen('result')}
         />
       )}

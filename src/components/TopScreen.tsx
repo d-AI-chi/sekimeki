@@ -2,9 +2,10 @@ import React from 'react';
 
 interface Props {
   onStart: () => void;
+  onJoin: () => void;
 }
 
-export const TopScreen: React.FC<Props> = ({ onStart }) => {
+export const TopScreen: React.FC<Props> = ({ onStart, onJoin }) => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
       {/* Background particles */}
@@ -44,13 +45,19 @@ export const TopScreen: React.FC<Props> = ({ onStart }) => {
           >
             ルームをつくる
           </button>
+          <button
+            onClick={onJoin}
+            className="w-full py-4 px-8 bg-gray-800/80 border-2 border-gray-600 text-white font-bold text-lg rounded-2xl hover:border-secondary hover:bg-gray-700/80 transition-all duration-200 active:scale-95"
+          >
+            コードで参加する
+          </button>
         </div>
 
         <p className="mt-8 text-sm text-gray-500">
           ※アプリ不要・登録不要
         </p>
         <p className="mt-2 text-xs text-gray-600">
-          スマホを回して全員で診断 → 最適な席順を提案！
+          各自のスマホで診断 → 最適な席順を提案！
         </p>
       </div>
 

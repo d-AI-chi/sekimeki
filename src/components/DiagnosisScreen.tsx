@@ -5,15 +5,11 @@ import { AVATARS } from '../data/avatars';
 
 interface Props {
   participant: Participant;
-  currentIndex: number;
-  totalParticipants: number;
   onComplete: (answers: number[]) => void;
 }
 
-// Shuffle questions (same order for display, but randomized per participant)
 function shuffleQuestions(seed: string) {
   const indices = QUESTIONS.map((_, i) => i);
-  // Simple deterministic shuffle based on participant id
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
@@ -28,13 +24,8 @@ function shuffleQuestions(seed: string) {
 
 const TIME_LIMIT = 9;
 
-export const DiagnosisScreen: React.FC<Props> = ({
-  participant,
-  currentIndex,
-  totalParticipants,
-  onComplete,
-}) => {
-  const [showIntro, setShowIntro] = useState(true);
+export const DiagnosisScreen: React.FC<Props> = ({ participant, onComplete }) => {
+  const [started, setStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>(Array(10).fill(0));
   const [currentValue, setCurrentValue] = useState(3);
@@ -65,7 +56,6 @@ export const DiagnosisScreen: React.FC<Props> = ({
           setIsAnimating(false);
         }, 300);
       } else {
-        // Complete
         setTimeout(() => {
           onComplete(newAnswers);
         }, 300);
@@ -74,42 +64,36 @@ export const DiagnosisScreen: React.FC<Props> = ({
     [answers, questionIndex, shuffled, isAnimating, onComplete]
   );
 
-  // Timer
   useEffect(() => {
-    if (showIntro) return;
+    if (!started) return;
     const interval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
-          advanceQuestion(3); // Default to middle value
+          advanceQuestion(3);
           return TIME_LIMIT;
         }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [showIntro, questionIndex, advanceQuestion]);
+  }, [started, questionIndex, advanceQuestion]);
 
-  if (showIntro) {
+  // Start screen
+  if (!started) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
         <div className="animate-pop">
           <div className="text-6xl mb-4">{avatarData?.emoji}</div>
-          <h2 className="text-3xl font-bold mb-2">{participant.name}の番！</h2>
-          <p className="text-gray-400 mb-2">
-            {currentIndex + 1} / {totalParticipants} 人目
-          </p>
+          <h2 className="text-3xl font-bold mb-2">{participant.name}さん</h2>
           <p className="text-sm text-gray-500 mb-8">
             10問の質問に答えてね（1問9秒）
           </p>
           <button
-            onClick={() => setShowIntro(false)}
+            onClick={() => setStarted(true)}
             className="py-4 px-12 bg-gradient-to-r from-secondary to-teal-400 text-white font-bold text-lg rounded-2xl shadow-lg hover:scale-105 transition-all active:scale-95"
           >
             スタート！
           </button>
-          <p className="mt-6 text-xs text-gray-600">
-            ※ 他の人に見られないように答えてね 👀
-          </p>
         </div>
       </div>
     );
@@ -161,7 +145,6 @@ export const DiagnosisScreen: React.FC<Props> = ({
             {question.text}
           </h3>
 
-          {/* Labels */}
           <div className="flex justify-between mb-4 px-2">
             <span className="text-xs text-gray-400 max-w-[120px] text-left">
               {question.leftLabel}
@@ -171,7 +154,6 @@ export const DiagnosisScreen: React.FC<Props> = ({
             </span>
           </div>
 
-          {/* Slider buttons */}
           <div className="flex gap-3 justify-center mb-8">
             {[1, 2, 3, 4, 5].map((val) => (
               <button
@@ -188,7 +170,6 @@ export const DiagnosisScreen: React.FC<Props> = ({
             ))}
           </div>
 
-          {/* Confirm button */}
           <button
             onClick={() => advanceQuestion(currentValue)}
             disabled={isAnimating}

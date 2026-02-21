@@ -20,9 +20,10 @@ export interface Participant {
   gender?: Gender;
   avatar: string;
   answers: number[];
-  vector?: number[]; // [E, C, V, L, H]
+  vector?: number[];
   personalType?: string;
   personalTypeEmoji?: string;
+  completed?: boolean;
 }
 
 export interface CompatibilityResult {
@@ -33,6 +34,7 @@ export interface CompatibilityResult {
   displayScore: number;
   typeName: string;
   topAxis: Axis;
+  visible?: boolean;
 }
 
 export interface Award {
@@ -47,24 +49,45 @@ export interface SeatAssignment {
   seatIndex: number;
 }
 
-export interface GameState {
-  screen: Screen;
-  mode: Mode;
-  layout: SeatLayout;
-  participants: Participant[];
-  currentDiagnosisIndex: number;
-  compatibilityResults: CompatibilityResult[];
-  seatAssignments: SeatAssignment[];
-  awards: Award[];
-  reshuffleCount: number;
-}
+export type RoomState = 'waiting' | 'diagnosing' | 'admin-review' | 'results';
+
+export type Role = 'admin' | 'participant';
 
 export type Screen =
+  | 'loading'
   | 'top'
   | 'setup'
-  | 'register'
-  | 'diagnosis-intro'
+  | 'join'
+  | 'profile'
+  | 'waiting'
   | 'diagnosis'
-  | 'calculating'
+  | 'waiting-results'
+  | 'admin-review'
   | 'result'
   | 'matrix';
+
+export interface RoomData {
+  config: {
+    mode: Mode;
+    layout: SeatLayout;
+    adminId: string;
+    state: RoomState;
+    createdAt: number;
+  };
+  participants: Record<string, {
+    name: string;
+    gender: string | null;
+    avatar: string;
+    answers: number[] | null;
+    completed: boolean;
+    vector?: number[];
+    personalType?: string;
+    personalTypeEmoji?: string;
+  }>;
+  results?: {
+    compatibility: Record<string, CompatibilityResult & { visible: boolean }>;
+    seatAssignments: Record<string, SeatAssignment>;
+    awards: Record<string, Award>;
+    revealed: boolean;
+  };
+}
