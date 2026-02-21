@@ -1,0 +1,18 @@
+export const AVATARS = [
+  { id: 'dog', emoji: '🐶', label: 'イヌ' },
+  { id: 'cat', emoji: '🐱', label: 'ネコ' },
+  { id: 'bear', emoji: '🐻', label: 'クマ' },
+  { id: 'fox', emoji: '🦊', label: 'キツネ' },
+  { id: 'lion', emoji: '🦁', label: 'ライオン' },
+  { id: 'rabbit', emoji: '🐰', label: 'ウサギ' },
+  { id: 'panda', emoji: '🐼', label: 'パンダ' },
+  { id: 'penguin', emoji: '🐧', label: 'ペンギン' },
+  { id: 'koala', emoji: '🐨', label: 'コアラ' },
+  { id: 'unicorn', emoji: '🦄', label: 'ユニコーン' },
+  { id: 'dolphin', emoji: '🐬', label: 'イルカ' },
+  { id: 'owl', emoji: '🦉', label: 'フクロウ' },
+  { id: 'tiger', emoji: '🐯', label: 'トラ' },
+  { id: 'monkey', emoji: '🐵', label: 'サル' },
+  { id: 'wolf', emoji: '🐺', label: 'オオカミ' },
+  { id: 'hamster', emoji: '🐹', label: 'ハムスター' },
+];
