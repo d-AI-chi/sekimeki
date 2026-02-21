@@ -84,16 +84,12 @@ export async function createRoom(
     attempts++;
   }
 
-  await set(ref(db, `rooms/${roomCode}`), {
-    config: {
-      mode,
-      layout,
-      adminId,
-      state: 'waiting' as RoomState,
-      createdAt: Date.now(),
-    },
-    participants: {},
-    results: null,
+  await set(ref(db, `rooms/${roomCode}/config`), {
+    mode,
+    layout,
+    adminId,
+    state: 'waiting' as RoomState,
+    createdAt: Date.now(),
   });
 
   return roomCode;
@@ -180,12 +176,14 @@ export async function publishResults(
     awardData[String(i)] = a;
   });
 
-  await update(ref(db, `rooms/${roomCode}`), {
-    'results/compatibility': compatibility,
-    'results/seatAssignments': seats,
-    'results/awards': awardData,
-    'results/revealed': false,
-    'config/state': 'admin-review',
+  await set(ref(db, `rooms/${roomCode}/results`), {
+    compatibility,
+    seatAssignments: seats,
+    awards: awardData,
+    revealed: false,
+  });
+  await update(ref(db, `rooms/${roomCode}/config`), {
+    state: 'admin-review',
   });
 
   // Update participant personal types
@@ -205,9 +203,11 @@ export async function togglePairVisibility(
 }
 
 export async function revealResults(roomCode: string): Promise<void> {
-  await update(ref(db, `rooms/${roomCode}`), {
-    'results/revealed': true,
-    'config/state': 'results',
+  await update(ref(db, `rooms/${roomCode}/results`), {
+    revealed: true,
+  });
+  await update(ref(db, `rooms/${roomCode}/config`), {
+    state: 'results',
   });
 }
 

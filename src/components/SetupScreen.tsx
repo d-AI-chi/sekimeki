@@ -91,7 +91,7 @@ export const SetupScreen: React.FC<Props> = ({ onComplete, onBack }) => {
         onClick={() => onComplete(mode, layout)}
         className="w-full py-4 bg-gradient-to-r from-primary to-pink-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:scale-105 transition-all duration-200 active:scale-95"
       >
-        次へ：メンバー登録
+        ルームを作成する
       </button>
     </div>
   );
