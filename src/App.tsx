@@ -8,7 +8,6 @@ import { getPersonalType } from './data/typeNames';
 import {
   createRoom,
   joinRoom,
-  startDiagnosis,
   submitAnswers,
   publishResults,
   togglePairVisibility,
@@ -48,20 +47,8 @@ export const App: React.FC = () => {
     const state = room.roomData.config.state;
 
     if (localRole === 'participant') {
-      if (state === 'diagnosing' && room.myParticipant && !room.myParticipant.completed) {
-        setScreen('diagnosis');
-      } else if (state === 'diagnosing' && room.myParticipant?.completed) {
-        setScreen('waiting-results');
-      } else if ((state === 'admin-review') && !room.revealed) {
-        setScreen('waiting-results');
-      } else if (state === 'results' && room.revealed) {
+      if (state === 'results' && room.revealed) {
         setScreen('result');
-      }
-    }
-
-    if (localRole === 'admin') {
-      if (state === 'diagnosing' && room.allCompleted && screen === 'diagnosis') {
-        handleCalculateResults();
       }
     }
   }, [room.roomData?.config.state, room.allCompleted, room.revealed, room.myParticipant?.completed]);
@@ -74,12 +61,6 @@ export const App: React.FC = () => {
     setLocalRole('admin');
     setScreen('waiting');
   }, [room]);
-
-  const handleStartDiagnosis = useCallback(async () => {
-    if (!room.roomCode) return;
-    await startDiagnosis(room.roomCode);
-    setScreen('diagnosis');
-  }, [room.roomCode]);
 
   const handleCalculateResults = useCallback(async () => {
     if (!room.roomCode || !room.roomData) return;
@@ -159,7 +140,8 @@ export const App: React.FC = () => {
       gender: profile.gender,
       avatar: profile.avatar,
     });
-    setScreen('waiting');
+    // Participants go directly to diagnosis after profile
+    setScreen('diagnosis');
   }, [room.roomCode]);
 
   const handleDiagnosisComplete = useCallback(async (answers: number[]) => {
@@ -231,7 +213,7 @@ export const App: React.FC = () => {
           roomCode={room.roomCode}
           participants={room.participants}
           role={localRole}
-          onStartDiagnosis={handleStartDiagnosis}
+          onCalculateResults={handleCalculateResults}
           onBack={handleBack}
         />
       )}
@@ -241,27 +223,6 @@ export const App: React.FC = () => {
           participant={room.myParticipant}
           onComplete={handleDiagnosisComplete}
         />
-      )}
-
-      {screen === 'diagnosis' && localRole === 'admin' && !room.myParticipant && (
-        <div className="min-h-screen flex items-center justify-center px-6">
-          <div className="text-center">
-            <div className="text-4xl mb-4">📊</div>
-            <h2 className="text-xl font-bold mb-2">診断進行中</h2>
-            <p className="text-gray-400 mb-4">
-              {room.participants.filter((p) => p.completed).length} / {room.participants.length} 人完了
-            </p>
-            <div className="flex justify-center gap-2">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="w-3 h-3 bg-secondary rounded-full animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
       )}
 
       {screen === 'waiting-results' && (

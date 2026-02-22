@@ -6,7 +6,7 @@ interface Props {
   roomCode: string;
   participants: Participant[];
   role: Role;
-  onStartDiagnosis: () => void;
+  onCalculateResults: () => void;
   onBack: () => void;
 }
 
@@ -14,10 +14,11 @@ export const WaitingScreen: React.FC<Props> = ({
   roomCode,
   participants,
   role,
-  onStartDiagnosis,
+  onCalculateResults,
   onBack,
 }) => {
-  const canStart = participants.length >= 3;
+  const completedCount = participants.filter((p) => p.completed).length;
+  const allCompleted = participants.length >= 2 && participants.every((p) => p.completed);
 
   return (
     <div className="min-h-screen px-6 py-8">
@@ -48,6 +49,11 @@ export const WaitingScreen: React.FC<Props> = ({
       <div className="mb-8">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
           参加者 ({participants.length}名)
+          {participants.length > 0 && (
+            <span className="ml-2 text-secondary">
+              {completedCount}/{participants.length} 回答済み
+            </span>
+          )}
         </h3>
         <div className="space-y-2">
           {participants.map((p, idx) => {
@@ -71,6 +77,13 @@ export const WaitingScreen: React.FC<Props> = ({
                     {p.gender === 'male' ? '♂' : '♀'}
                   </span>
                 )}
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  p.completed
+                    ? 'bg-green-500/20 text-green-300'
+                    : 'bg-gray-600/30 text-gray-500'
+                }`}>
+                  {p.completed ? '✓ 完了' : '回答中...'}
+                </span>
               </div>
             );
           })}
@@ -84,26 +97,23 @@ export const WaitingScreen: React.FC<Props> = ({
       </div>
 
       {/* Admin controls */}
-      {role === 'admin' ? (
+      {role === 'admin' && (
         <div>
           <button
-            onClick={onStartDiagnosis}
-            disabled={!canStart}
+            onClick={onCalculateResults}
+            disabled={!allCompleted}
             className={`w-full py-4 font-bold text-lg rounded-2xl shadow-lg transition-all duration-200 ${
-              canStart
+              allCompleted
                 ? 'bg-gradient-to-r from-primary to-pink-500 text-white hover:scale-105 active:scale-95'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {canStart ? '🚀 診断スタート！' : `あと${3 - participants.length}人で開始できます`}
+            {allCompleted
+              ? '🎯 結果を計算する'
+              : participants.length < 2
+                ? 'あと2人以上の参加が必要です'
+                : `${completedCount}/${participants.length} 人回答済み（全員完了で計算可能）`}
           </button>
-        </div>
-      ) : (
-        <div className="text-center py-4">
-          <div className="inline-flex items-center gap-2 bg-gray-800/60 rounded-full px-6 py-3">
-            <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-            <span className="text-gray-300 text-sm">幹事がスタートするまでお待ちください</span>
-          </div>
         </div>
       )}
     </div>

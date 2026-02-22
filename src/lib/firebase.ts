@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, browserSessionPersistence, setPersistence } from 'firebase/auth';
 import {
   getDatabase,
   ref,
@@ -41,13 +41,17 @@ let currentUid: string | null = null;
 
 export function initAuth(): Promise<string> {
   return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        currentUid = user.uid;
-        resolve(user.uid);
-      }
-    });
-    signInAnonymously(auth).catch(reject);
+    setPersistence(auth, browserSessionPersistence)
+      .then(() => {
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            currentUid = user.uid;
+            resolve(user.uid);
+          }
+        });
+        signInAnonymously(auth).catch(reject);
+      })
+      .catch(reject);
   });
 }
 
