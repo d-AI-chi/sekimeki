@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Mode, SeatLayout } from '../types';
 
 interface Props {
-  onComplete: (mode: Mode, layout: SeatLayout) => void;
+  onComplete: (mode: Mode, layout: SeatLayout, password: string) => void;
   onBack: () => void;
 }
 
@@ -18,6 +18,7 @@ const LAYOUTS: { id: SeatLayout; name: string; icon: string; desc: string }[] = 
 export const SetupScreen: React.FC<Props> = ({ onComplete, onBack }) => {
   const [mode, setMode] = useState<Mode>('goukon');
   const [layout, setLayout] = useState<SeatLayout>('facing-long');
+  const [password, setPassword] = useState('');
 
   return (
     <div className="min-h-screen px-6 py-8">
@@ -87,9 +88,31 @@ export const SetupScreen: React.FC<Props> = ({ onComplete, onBack }) => {
         </div>
       </div>
 
+      {/* Admin password */}
+      <div className="mb-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          管理者パスワード
+        </h3>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="管理ページ用のパスワードを設定"
+          className="w-full bg-gray-900/60 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
+        />
+        <p className="text-xs text-gray-500 mt-2">
+          管理者ページに再ログインする際に必要です
+        </p>
+      </div>
+
       <button
-        onClick={() => onComplete(mode, layout)}
-        className="w-full py-4 bg-gradient-to-r from-primary to-pink-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:scale-105 transition-all duration-200 active:scale-95"
+        onClick={() => onComplete(mode, layout, password)}
+        disabled={!password.trim()}
+        className={`w-full py-4 font-bold text-lg rounded-2xl shadow-lg transition-all duration-200 ${
+          password.trim()
+            ? 'bg-gradient-to-r from-primary to-pink-500 text-white hover:scale-105 active:scale-95'
+            : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+        }`}
       >
         ルームを作成する
       </button>

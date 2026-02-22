@@ -58,6 +58,7 @@ export type Screen =
   | 'top'
   | 'setup'
   | 'join'
+  | 'admin-login'
   | 'profile'
   | 'waiting'
   | 'diagnosis'
@@ -71,6 +72,7 @@ export interface RoomData {
     mode: Mode;
     layout: SeatLayout;
     adminId: string;
+    adminPassword: string;
     state: RoomState;
     createdAt: number;
   };

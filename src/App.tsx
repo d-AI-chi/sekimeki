@@ -15,6 +15,7 @@ import {
   updateSeatAssignments,
   getRoomConfig,
   leaveRoom,
+  verifyAdminPassword,
 } from './lib/firebase';
 
 import { TopScreen } from './components/TopScreen';
@@ -26,6 +27,7 @@ import { DiagnosisScreen } from './components/DiagnosisScreen';
 import { AdminResultScreen } from './components/AdminResultScreen';
 import { ResultScreen } from './components/ResultScreen';
 import { MatrixScreen } from './components/MatrixScreen';
+import { AdminLoginScreen } from './components/AdminLoginScreen';
 
 export const App: React.FC = () => {
   const room = useRoom();
@@ -55,8 +57,8 @@ export const App: React.FC = () => {
 
   // --- Admin Actions ---
 
-  const handleCreateRoom = useCallback(async (mode: Mode, layout: SeatLayout) => {
-    const code = await createRoom(mode, layout);
+  const handleCreateRoom = useCallback(async (mode: Mode, layout: SeatLayout, password: string) => {
+    const code = await createRoom(mode, layout, password);
     room.setRoomCode(code);
     setLocalRole('admin');
     setScreen('waiting');
@@ -125,6 +127,21 @@ export const App: React.FC = () => {
 
   // --- Participant Actions ---
 
+  const handleAdminLogin = useCallback(async (code: string) => {
+    const config = await getRoomConfig(code);
+    if (!config) return;
+    room.setRoomCode(code);
+    setLocalRole('admin');
+    // Route to appropriate admin screen based on room state
+    if (config.state === 'admin-review') {
+      setScreen('admin-review');
+    } else if (config.state === 'results') {
+      setScreen('result');
+    } else {
+      setScreen('waiting');
+    }
+  }, [room]);
+
   const handleJoinRoom = useCallback(async (code: string) => {
     const config = await getRoomConfig(code);
     if (!config) return;
@@ -182,6 +199,14 @@ export const App: React.FC = () => {
         <TopScreen
           onStart={() => setScreen('setup')}
           onJoin={() => setScreen('join')}
+          onAdminLogin={() => setScreen('admin-login')}
+        />
+      )}
+
+      {screen === 'admin-login' && (
+        <AdminLoginScreen
+          onLogin={handleAdminLogin}
+          onBack={() => setScreen('top')}
         />
       )}
 

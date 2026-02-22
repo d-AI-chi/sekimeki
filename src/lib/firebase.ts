@@ -74,7 +74,8 @@ function generateRoomCode(): string {
 
 export async function createRoom(
   mode: Mode,
-  layout: SeatLayout
+  layout: SeatLayout,
+  password: string
 ): Promise<string> {
   const adminId = getUid();
   let roomCode = generateRoomCode();
@@ -92,11 +93,22 @@ export async function createRoom(
     mode,
     layout,
     adminId,
+    adminPassword: password,
     state: 'waiting' as RoomState,
     createdAt: Date.now(),
   });
 
   return roomCode;
+}
+
+export async function verifyAdminPassword(
+  roomCode: string,
+  password: string
+): Promise<boolean> {
+  const snapshot = await get(ref(db, `rooms/${roomCode}/config`));
+  if (!snapshot.exists()) return false;
+  const config = snapshot.val();
+  return config.adminPassword === password;
 }
 
 export async function checkRoomExists(roomCode: string): Promise<boolean> {
