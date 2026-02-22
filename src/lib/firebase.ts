@@ -159,7 +159,7 @@ export async function publishResults(
   compatibilityResults: CompatibilityResult[],
   seatAssignments: SeatAssignment[],
   awards: Award[],
-  participantUpdates: Record<string, { vector: number[]; personalType: string; personalTypeEmoji: string }>
+  participantTypes: Record<string, { vector: number[]; personalType: string; personalTypeEmoji: string }>
 ): Promise<void> {
   // Store compatibility results with visibility flag
   const compatibility: Record<string, any> = {};
@@ -180,20 +180,17 @@ export async function publishResults(
     awardData[String(i)] = a;
   });
 
+  // Store everything in results path (admin has write access here)
   await set(ref(db, `rooms/${roomCode}/results`), {
     compatibility,
     seatAssignments: seats,
     awards: awardData,
     revealed: false,
+    participantTypes,
   });
   await update(ref(db, `rooms/${roomCode}/config`), {
     state: 'admin-review',
   });
-
-  // Update participant personal types
-  for (const [pid, data] of Object.entries(participantUpdates)) {
-    await update(ref(db, `rooms/${roomCode}/participants/${pid}`), data);
-  }
 }
 
 export async function togglePairVisibility(

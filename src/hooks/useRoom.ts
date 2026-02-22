@@ -53,6 +53,9 @@ export function useRoom(): UseRoomReturn {
   const role: Role | null =
     roomData && uid ? (roomData.config.adminId === uid ? 'admin' : 'participant') : null;
 
+  // Merge participant types from results (stored there because admin can't write to participant paths)
+  const participantTypes: Record<string, any> = roomData?.results?.participantTypes ?? {};
+
   const participants: Participant[] = roomData?.participants
     ? Object.entries(roomData.participants).map(([id, p]) => ({
         id,
@@ -61,9 +64,9 @@ export function useRoom(): UseRoomReturn {
         avatar: p.avatar,
         answers: p.answers ?? [],
         completed: p.completed,
-        vector: p.vector,
-        personalType: p.personalType,
-        personalTypeEmoji: p.personalTypeEmoji,
+        vector: participantTypes[id]?.vector ?? p.vector,
+        personalType: participantTypes[id]?.personalType ?? p.personalType,
+        personalTypeEmoji: participantTypes[id]?.personalTypeEmoji ?? p.personalTypeEmoji,
       }))
     : [];
 

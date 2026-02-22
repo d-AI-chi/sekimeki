@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { checkRoomExists } from '../lib/firebase';
 
 interface Props {
@@ -7,9 +7,16 @@ interface Props {
 }
 
 export const JoinScreen: React.FC<Props> = ({ onJoin, onBack }) => {
-  const [code, setCode] = useState('');
+  const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
+
+  const code = digits.join('');
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -28,6 +35,67 @@ export const JoinScreen: React.FC<Props> = ({ onJoin, onBack }) => {
     onJoin(trimmed);
   };
 
+  const handleInput = (index: number, value: string) => {
+    // Take only the last character typed (handles IME double input)
+    const char = value.slice(-1).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!char) return;
+
+    const newDigits = [...digits];
+    newDigits[index] = char;
+    setDigits(newDigits);
+    setError('');
+
+    // Auto-advance to next input
+    if (index < 3) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 4 filled
+    if (index === 3 && newDigits.every((d) => d !== '')) {
+      setTimeout(() => {
+        const fullCode = newDigits.join('');
+        if (fullCode.length === 4) {
+          // Trigger join
+          inputRefs.current[3]?.blur();
+        }
+      }, 100);
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      const newDigits = [...digits];
+      if (digits[index]) {
+        // Clear current
+        newDigits[index] = '';
+        setDigits(newDigits);
+      } else if (index > 0) {
+        // Move back and clear previous
+        newDigits[index - 1] = '';
+        setDigits(newDigits);
+        inputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === 'Enter') {
+      handleJoin();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    if (pasted.length > 0) {
+      const newDigits = ['', '', '', ''];
+      for (let i = 0; i < Math.min(pasted.length, 4); i++) {
+        newDigits[i] = pasted[i];
+      }
+      setDigits(newDigits);
+      setError('');
+      const focusIndex = Math.min(pasted.length, 3);
+      inputRefs.current[focusIndex]?.focus();
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <button
@@ -42,22 +110,26 @@ export const JoinScreen: React.FC<Props> = ({ onJoin, onBack }) => {
         <h2 className="text-2xl font-bold text-center mb-8">ルームに参加</h2>
 
         <div className="mb-6">
-          <label className="block text-sm text-gray-400 mb-2">ルームコード</label>
-          <input
-            type="text"
-            value={code}
-            onChange={(e) => {
-              setCode(e.target.value.toUpperCase().slice(0, 4));
-              setError('');
-            }}
-            placeholder="例：A3K7"
-            maxLength={4}
-            className="w-full bg-gray-900/60 border border-gray-600 rounded-xl px-4 py-4 text-white text-center text-3xl font-mono tracking-[0.5em] placeholder-gray-600 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors uppercase"
-            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-            autoFocus
-          />
+          <label className="block text-sm text-gray-400 mb-3 text-center">ルームコード</label>
+          <div className="flex gap-3 justify-center">
+            {digits.map((digit, i) => (
+              <input
+                key={i}
+                ref={(el) => { inputRefs.current[i] = el; }}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                value={digit}
+                onChange={(e) => handleInput(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                onPaste={i === 0 ? handlePaste : undefined}
+                className="w-14 h-16 bg-gray-900/60 border-2 border-gray-600 rounded-xl text-white text-center text-2xl font-mono font-bold focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors uppercase"
+              />
+            ))}
+          </div>
           {error && (
-            <p className="text-red-400 text-sm mt-2 text-center">{error}</p>
+            <p className="text-red-400 text-sm mt-3 text-center">{error}</p>
           )}
         </div>
 

@@ -89,5 +89,6 @@ export interface RoomData {
     seatAssignments: Record<string, SeatAssignment>;
     awards: Record<string, Award>;
     revealed: boolean;
+    participantTypes?: Record<string, { vector: number[]; personalType: string; personalTypeEmoji: string }>;
   };
 }
