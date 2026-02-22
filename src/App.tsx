@@ -32,6 +32,7 @@ export const App: React.FC = () => {
   const room = useRoom();
   const [screen, setScreen] = useState<Screen>('loading');
   const [reshuffleCount, setReshuffleCount] = useState(1);
+  const [localRole, setLocalRole] = useState<'admin' | 'participant' | null>(null);
 
   // Wait for auth to be ready
   useEffect(() => {
@@ -40,13 +41,13 @@ export const App: React.FC = () => {
     }
   }, [room.isReady, screen]);
 
-  // React to room state changes (for participants)
+  // React to room state changes
   useEffect(() => {
-    if (!room.roomData || !room.role) return;
+    if (!room.roomData || !localRole) return;
 
     const state = room.roomData.config.state;
 
-    if (room.role === 'participant') {
+    if (localRole === 'participant') {
       if (state === 'diagnosing' && room.myParticipant && !room.myParticipant.completed) {
         setScreen('diagnosis');
       } else if (state === 'diagnosing' && room.myParticipant?.completed) {
@@ -58,7 +59,7 @@ export const App: React.FC = () => {
       }
     }
 
-    if (room.role === 'admin') {
+    if (localRole === 'admin') {
       if (state === 'diagnosing' && room.allCompleted && screen === 'diagnosis') {
         handleCalculateResults();
       }
@@ -70,6 +71,7 @@ export const App: React.FC = () => {
   const handleCreateRoom = useCallback(async (mode: Mode, layout: SeatLayout) => {
     const code = await createRoom(mode, layout);
     room.setRoomCode(code);
+    setLocalRole('admin');
     setScreen('waiting');
   }, [room]);
 
@@ -146,15 +148,8 @@ export const App: React.FC = () => {
     const config = await getRoomConfig(code);
     if (!config) return;
     room.setRoomCode(code);
-    if (config.adminId === room.uid) {
-      // Rejoining as admin
-      if (config.state === 'waiting') setScreen('waiting');
-      else if (config.state === 'admin-review') setScreen('admin-review');
-      else if (config.state === 'results') setScreen('result');
-      else setScreen('waiting');
-    } else {
-      setScreen('profile');
-    }
+    setLocalRole('participant');
+    setScreen('profile');
   }, [room]);
 
   const handleProfileSubmit = useCallback(async (profile: { name: string; gender?: string; avatar: string }) => {
@@ -170,20 +165,21 @@ export const App: React.FC = () => {
   const handleDiagnosisComplete = useCallback(async (answers: number[]) => {
     if (!room.roomCode) return;
     await submitAnswers(room.roomCode, answers);
-    if (room.role === 'admin') {
+    if (localRole === 'admin') {
       setScreen('waiting');
     } else {
       setScreen('waiting-results');
     }
-  }, [room.roomCode, room.role]);
+  }, [room.roomCode, localRole]);
 
   const handleBack = useCallback(async () => {
-    if (room.roomCode && screen === 'waiting' && room.role === 'participant') {
+    if (room.roomCode && screen === 'waiting' && localRole === 'participant') {
       await leaveRoom(room.roomCode);
     }
     room.setRoomCode('');
+    setLocalRole(null);
     setScreen('top');
-  }, [room, screen]);
+  }, [room, screen, localRole]);
 
   // --- Render ---
 
@@ -230,11 +226,11 @@ export const App: React.FC = () => {
         />
       )}
 
-      {screen === 'waiting' && room.roomCode && (
+      {screen === 'waiting' && room.roomCode && localRole && (
         <WaitingScreen
           roomCode={room.roomCode}
           participants={room.participants}
-          role={room.role!}
+          role={localRole}
           onStartDiagnosis={handleStartDiagnosis}
           onBack={handleBack}
         />
@@ -247,7 +243,7 @@ export const App: React.FC = () => {
         />
       )}
 
-      {screen === 'diagnosis' && room.role === 'admin' && !room.myParticipant && (
+      {screen === 'diagnosis' && localRole === 'admin' && !room.myParticipant && (
         <div className="min-h-screen flex items-center justify-center px-6">
           <div className="text-center">
             <div className="text-4xl mb-4">📊</div>
@@ -308,11 +304,11 @@ export const App: React.FC = () => {
       {screen === 'result' && room.roomData && (
         <ResultScreen
           participants={room.participants}
-          results={room.role === 'admin' ? room.compatibilityResults : room.visibleResults}
+          results={localRole === 'admin' ? room.compatibilityResults : room.visibleResults}
           seatAssignments={room.seatAssignments}
           awards={room.awards}
           layout={room.roomData.config.layout}
-          onReshuffle={room.role === 'admin' ? handleReshuffle : undefined}
+          onReshuffle={localRole === 'admin' ? handleReshuffle : undefined}
           onShowMatrix={() => setScreen('matrix')}
           reshuffleCount={reshuffleCount}
         />
@@ -321,7 +317,7 @@ export const App: React.FC = () => {
       {screen === 'matrix' && (
         <MatrixScreen
           participants={room.participants}
-          results={room.role === 'admin' ? room.compatibilityResults : room.visibleResults}
+          results={localRole === 'admin' ? room.compatibilityResults : room.visibleResults}
           onBack={() => setScreen('result')}
         />
       )}
