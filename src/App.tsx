@@ -142,7 +142,13 @@ export const App: React.FC = () => {
   const handleAdminLogin = useCallback(async (code: string) => {
     const config = await getRoomConfig(code);
     if (!config) return;
-    await updateAdminId(code);
+    // Try to update adminId to current session (allows write access if security rules check adminId)
+    // Non-fatal: continue login flow even if this fails
+    try {
+      await updateAdminId(code);
+    } catch (err) {
+      console.warn('Could not update adminId, write access may be limited:', err);
+    }
     room.setRoomCode(code);
     setLocalRole('admin');
     // Route to appropriate admin screen based on room state
