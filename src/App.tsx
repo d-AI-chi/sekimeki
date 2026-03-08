@@ -17,6 +17,7 @@ import {
   leaveRoom,
   verifyAdminPassword,
   updateAdminId,
+  checkResultsExist,
 } from './lib/firebase';
 
 import { TopScreen } from './components/TopScreen';
@@ -50,7 +51,8 @@ export const App: React.FC = () => {
     const state = room.roomData.config.state;
 
     if (localRole === 'participant') {
-      if (state === 'results' && room.revealed) {
+      // Use room.revealed as the primary signal (config.state may not update if admin used password login)
+      if (room.revealed) {
         setScreen('result');
       }
     }
@@ -149,7 +151,14 @@ export const App: React.FC = () => {
     } else if (config.state === 'results') {
       setScreen('result');
     } else {
-      setScreen('waiting');
+      // Check if results already exist even when state is 'waiting'
+      // (happens when results were saved but config state update failed)
+      const hasResults = await checkResultsExist(code);
+      if (hasResults) {
+        setScreen('admin-review');
+      } else {
+        setScreen('waiting');
+      }
     }
   }, [room]);
 
