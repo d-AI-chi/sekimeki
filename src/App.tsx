@@ -69,8 +69,12 @@ export const App: React.FC = () => {
     if (!room.roomCode || !room.roomData) return;
 
     try {
+      // Use only completed participants for calculation
+      const completedParticipants = room.participants.filter((p) => p.completed);
+      if (completedParticipants.length < 2) return;
+
       // Build participants with vectors
-      const participantsWithVectors = room.participants.map((p) => {
+      const participantsWithVectors = completedParticipants.map((p) => {
         const vector = computeVector(p.answers);
         const pt = getPersonalType(vector);
         return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
