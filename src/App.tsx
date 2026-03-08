@@ -16,6 +16,7 @@ import {
   getRoomConfig,
   leaveRoom,
   verifyAdminPassword,
+  updateAdminId,
 } from './lib/firebase';
 
 import { TopScreen } from './components/TopScreen';
@@ -67,31 +68,36 @@ export const App: React.FC = () => {
   const handleCalculateResults = useCallback(async () => {
     if (!room.roomCode || !room.roomData) return;
 
-    // Build participants with vectors
-    const participantsWithVectors = room.participants.map((p) => {
-      const vector = computeVector(p.answers);
-      const pt = getPersonalType(vector);
-      return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
-    });
+    try {
+      // Build participants with vectors
+      const participantsWithVectors = room.participants.map((p) => {
+        const vector = computeVector(p.answers);
+        const pt = getPersonalType(vector);
+        return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
+      });
 
-    const results = computeAllCompatibility(participantsWithVectors);
-    const mode = room.roomData.config.mode;
-    const layout = room.roomData.config.layout;
-    const seats = optimizeSeating(participantsWithVectors, results, layout, mode);
-    const awards = computeAwards(participantsWithVectors, results, seats);
+      const results = computeAllCompatibility(participantsWithVectors);
+      const mode = room.roomData.config.mode;
+      const layout = room.roomData.config.layout;
+      const seats = optimizeSeating(participantsWithVectors, results, layout, mode);
+      const awards = computeAwards(participantsWithVectors, results, seats);
 
-    // Build participant updates for Firebase
-    const participantUpdates: Record<string, any> = {};
-    for (const p of participantsWithVectors) {
-      participantUpdates[p.id] = {
-        vector: p.vector,
-        personalType: p.personalType,
-        personalTypeEmoji: p.personalTypeEmoji,
-      };
+      // Build participant updates for Firebase
+      const participantUpdates: Record<string, any> = {};
+      for (const p of participantsWithVectors) {
+        participantUpdates[p.id] = {
+          vector: p.vector,
+          personalType: p.personalType,
+          personalTypeEmoji: p.personalTypeEmoji,
+        };
+      }
+
+      await publishResults(room.roomCode, results, seats, awards, participantUpdates);
+      setScreen('admin-review');
+    } catch (err) {
+      console.error('結果の計算に失敗しました:', err);
+      alert('結果の計算に失敗しました。もう一度お試しください。');
     }
-
-    await publishResults(room.roomCode, results, seats, awards, participantUpdates);
-    setScreen('admin-review');
   }, [room.roomCode, room.roomData, room.participants]);
 
   const handleTogglePair = useCallback(async (pairKey: string, visible: boolean) => {
@@ -130,6 +136,7 @@ export const App: React.FC = () => {
   const handleAdminLogin = useCallback(async (code: string) => {
     const config = await getRoomConfig(code);
     if (!config) return;
+    await updateAdminId(code);
     room.setRoomCode(code);
     setLocalRole('admin');
     // Route to appropriate admin screen based on room state

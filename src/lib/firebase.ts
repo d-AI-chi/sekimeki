@@ -116,6 +116,11 @@ export async function checkRoomExists(roomCode: string): Promise<boolean> {
   return snapshot.exists();
 }
 
+export async function updateAdminId(roomCode: string): Promise<void> {
+  const adminId = getUid();
+  await update(ref(db, `rooms/${roomCode}/config`), { adminId });
+}
+
 export async function getRoomConfig(
   roomCode: string
 ): Promise<{ mode: Mode; layout: SeatLayout; adminId: string; state: RoomState } | null> {
