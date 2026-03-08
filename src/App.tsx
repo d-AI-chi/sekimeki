@@ -114,6 +114,7 @@ export const App: React.FC = () => {
   const handleReveal = useCallback(async () => {
     if (!room.roomCode) return;
     await revealResults(room.roomCode);
+    setScreen('result');
   }, [room.roomCode]);
 
   const handleReshuffle = useCallback(async () => {
