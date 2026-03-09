@@ -50,13 +50,18 @@ export const App: React.FC = () => {
 
     const state = room.roomData.config.state;
 
-    if (localRole === 'participant') {
-      // Use room.revealed as the primary signal (config.state may not update if admin used password login)
+    if (localRole === 'admin') {
+      if (state === 'admin-review') {
+        setScreen('admin-review');
+      } else if (state === 'results') {
+        setScreen('result');
+      }
+    } else if (localRole === 'participant') {
       if (room.revealed) {
         setScreen('result');
       }
     }
-  }, [room.roomData?.config.state, room.allCompleted, room.revealed, room.myParticipant?.completed]);
+  }, [room.roomData?.config.state, localRole, room.revealed]);
 
   // --- Admin Actions ---
 

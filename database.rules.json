@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomCode": {
+        ".read": "auth != null",
+        "config": {
+          ".write": "auth != null"
+        },
+        "participants": {
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid"
+          }
+        },
+        "results": {
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
