@@ -16,6 +16,8 @@ import {
   getRoomConfig,
   leaveRoom,
   verifyAdminPassword,
+  updateAdminId,
+  checkResultsExist,
 } from './lib/firebase';
 
 import { TopScreen } from './components/TopScreen';
@@ -49,7 +51,8 @@ export const App: React.FC = () => {
     const state = room.roomData.config.state;
 
     if (localRole === 'participant') {
-      if (state === 'results' && room.revealed) {
+      // Use room.revealed as the primary signal (config.state may not update if admin used password login)
+      if (room.revealed) {
         setScreen('result');
       }
     }
@@ -67,31 +70,40 @@ export const App: React.FC = () => {
   const handleCalculateResults = useCallback(async () => {
     if (!room.roomCode || !room.roomData) return;
 
-    // Build participants with vectors
-    const participantsWithVectors = room.participants.map((p) => {
-      const vector = computeVector(p.answers);
-      const pt = getPersonalType(vector);
-      return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
-    });
+    try {
+      // Use only completed participants for calculation
+      const completedParticipants = room.participants.filter((p) => p.completed);
+      if (completedParticipants.length < 2) return;
 
-    const results = computeAllCompatibility(participantsWithVectors);
-    const mode = room.roomData.config.mode;
-    const layout = room.roomData.config.layout;
-    const seats = optimizeSeating(participantsWithVectors, results, layout, mode);
-    const awards = computeAwards(participantsWithVectors, results, seats);
+      // Build participants with vectors
+      const participantsWithVectors = completedParticipants.map((p) => {
+        const vector = computeVector(p.answers);
+        const pt = getPersonalType(vector);
+        return { ...p, vector, personalType: pt.name, personalTypeEmoji: pt.emoji };
+      });
 
-    // Build participant updates for Firebase
-    const participantUpdates: Record<string, any> = {};
-    for (const p of participantsWithVectors) {
-      participantUpdates[p.id] = {
-        vector: p.vector,
-        personalType: p.personalType,
-        personalTypeEmoji: p.personalTypeEmoji,
-      };
+      const results = computeAllCompatibility(participantsWithVectors);
+      const mode = room.roomData.config.mode;
+      const layout = room.roomData.config.layout;
+      const seats = optimizeSeating(participantsWithVectors, results, layout, mode);
+      const awards = computeAwards(participantsWithVectors, results, seats);
+
+      // Build participant updates for Firebase
+      const participantUpdates: Record<string, any> = {};
+      for (const p of participantsWithVectors) {
+        participantUpdates[p.id] = {
+          vector: p.vector,
+          personalType: p.personalType,
+          personalTypeEmoji: p.personalTypeEmoji,
+        };
+      }
+
+      await publishResults(room.roomCode, results, seats, awards, participantUpdates);
+      setScreen('admin-review');
+    } catch (err) {
+      console.error('結果の計算に失敗しました:', err);
+      alert('結果の計算に失敗しました。もう一度お試しください。');
     }
-
-    await publishResults(room.roomCode, results, seats, awards, participantUpdates);
-    setScreen('admin-review');
   }, [room.roomCode, room.roomData, room.participants]);
 
   const handleTogglePair = useCallback(async (pairKey: string, visible: boolean) => {
@@ -102,6 +114,7 @@ export const App: React.FC = () => {
   const handleReveal = useCallback(async () => {
     if (!room.roomCode) return;
     await revealResults(room.roomCode);
+    setScreen('result');
   }, [room.roomCode]);
 
   const handleReshuffle = useCallback(async () => {
@@ -130,6 +143,13 @@ export const App: React.FC = () => {
   const handleAdminLogin = useCallback(async (code: string) => {
     const config = await getRoomConfig(code);
     if (!config) return;
+    // Try to update adminId to current session (allows write access if security rules check adminId)
+    // Non-fatal: continue login flow even if this fails
+    try {
+      await updateAdminId(code);
+    } catch (err) {
+      console.warn('Could not update adminId, write access may be limited:', err);
+    }
     room.setRoomCode(code);
     setLocalRole('admin');
     // Route to appropriate admin screen based on room state
@@ -138,7 +158,14 @@ export const App: React.FC = () => {
     } else if (config.state === 'results') {
       setScreen('result');
     } else {
-      setScreen('waiting');
+      // Check if results already exist even when state is 'waiting'
+      // (happens when results were saved but config state update failed)
+      const hasResults = await checkResultsExist(code);
+      if (hasResults) {
+        setScreen('admin-review');
+      } else {
+        setScreen('waiting');
+      }
     }
   }, [room]);
 

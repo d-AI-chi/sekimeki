@@ -18,7 +18,7 @@ export const WaitingScreen: React.FC<Props> = ({
   onBack,
 }) => {
   const completedCount = participants.filter((p) => p.completed).length;
-  const allCompleted = participants.length >= 2 && participants.every((p) => p.completed);
+  const canCalculate = completedCount >= 2;
 
   return (
     <div className="min-h-screen px-6 py-8">
@@ -101,18 +101,18 @@ export const WaitingScreen: React.FC<Props> = ({
         <div>
           <button
             onClick={onCalculateResults}
-            disabled={!allCompleted}
+            disabled={!canCalculate}
             className={`w-full py-4 font-bold text-lg rounded-2xl shadow-lg transition-all duration-200 ${
-              allCompleted
+              canCalculate
                 ? 'bg-gradient-to-r from-primary to-pink-500 text-white hover:scale-105 active:scale-95'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {allCompleted
-              ? '🎯 結果を計算する'
-              : participants.length < 2
-                ? 'あと2人以上の参加が必要です'
-                : `${completedCount}/${participants.length} 人回答済み（全員完了で計算可能）`}
+            {canCalculate
+              ? `🎯 結果を計算する（${completedCount}人分）`
+              : completedCount < 2
+                ? `あと${2 - completedCount}人の回答が必要です`
+                : '計算できません'}
           </button>
         </div>
       )}

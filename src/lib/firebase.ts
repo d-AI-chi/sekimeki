@@ -116,6 +116,11 @@ export async function checkRoomExists(roomCode: string): Promise<boolean> {
   return snapshot.exists();
 }
 
+export async function updateAdminId(roomCode: string): Promise<void> {
+  const adminId = getUid();
+  await update(ref(db, `rooms/${roomCode}/config`), { adminId });
+}
+
 export async function getRoomConfig(
   roomCode: string
 ): Promise<{ mode: Mode; layout: SeatLayout; adminId: string; state: RoomState } | null> {
@@ -200,9 +205,20 @@ export async function publishResults(
     revealed: false,
     participantTypes,
   });
-  await update(ref(db, `rooms/${roomCode}/config`), {
-    state: 'admin-review',
-  });
+
+  // Try to update config state (non-fatal: if security rules block this, results are still saved)
+  try {
+    await update(ref(db, `rooms/${roomCode}/config`), {
+      state: 'admin-review',
+    });
+  } catch (err) {
+    console.warn('Could not update room state to admin-review (results were saved):', err);
+  }
+}
+
+export async function checkResultsExist(roomCode: string): Promise<boolean> {
+  const snapshot = await get(ref(db, `rooms/${roomCode}/results`));
+  return snapshot.exists();
 }
 
 export async function togglePairVisibility(
@@ -219,9 +235,15 @@ export async function revealResults(roomCode: string): Promise<void> {
   await update(ref(db, `rooms/${roomCode}/results`), {
     revealed: true,
   });
-  await update(ref(db, `rooms/${roomCode}/config`), {
-    state: 'results',
-  });
+
+  // Try to update config state (non-fatal: participants route via room.revealed flag instead)
+  try {
+    await update(ref(db, `rooms/${roomCode}/config`), {
+      state: 'results',
+    });
+  } catch (err) {
+    console.warn('Could not update room state to results (revealed flag was set):', err);
+  }
 }
 
 export async function updateSeatAssignments(
